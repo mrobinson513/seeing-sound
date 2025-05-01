@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "realtime-audio-analyzer"
+version = "0.1.0"
+description = "A real-time audio analyzer that maps audio input to colors and controls LIFX smart bulbs."
+authors = ["Your Name"]
+readme = "README.md"
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.12"
+numpy = "*"
+pyaudio = "*"
+PyYAML = "*"
+lifxlan = {git = "ssh://git@github.com/mclarkk/lifxlan.git"}
+
+[tool.poetry.group.dev.dependencies]
+# Add development dependencies here if needed
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

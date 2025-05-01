@@ -1,0 +1,4 @@
+max_updates_per_second: 24
+clip_threshold: 32000
+min_frequency: 20
+max_frequency: 20000
