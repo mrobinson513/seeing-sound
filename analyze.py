@@ -96,7 +96,7 @@ def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold):
 
         norm_freq = min(max((freq - min_freq) / (max_freq - min_freq), 0.0), 1.0)
         # Make hue wrap around more for higher frequency bands to make the output more colorful and dynamic
-        hue = int((np.sin(norm_freq * np.pi * 2) * 0.5 + 0.5) * 65535)
+        hue = int((np.sin((1.0 - norm_freq) * np.pi * 2) * 0.5 + 0.5) * 65535)
 
         # Make saturation lower at lower frequencies for pastel like tones, and higher at higher frequencies
         saturation = int(min(max(norm_freq * 1.2, 0.3), 1.0) * 65535)
