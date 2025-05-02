@@ -96,6 +96,7 @@ def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold):
 
         # norm freq might be overkill here
         norm_freq = min(max((freq - min_freq) / (max_freq - min_freq), 0.0), 1.0)
+        
         # Dynamic palettes based on frequency bands
         if norm_freq < 0.33:
             # Low frequencies -> blues and purples (cool)
