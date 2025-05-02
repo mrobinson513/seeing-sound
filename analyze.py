@@ -15,8 +15,8 @@ CHANNELS = 1              # Mono audio
 CONFIG_FILE = "config.yaml"
 DEFAULT_MAX_UPDATES_PER_SECOND = 30
 DEFAULT_CLIP_THRESHOLD = 32000
-DEFAULT_MIN_FREQ = 20
-DEFAULT_MAX_FREQ = 20000
+DEFAULT_MIN_FREQ = 100
+DEFAULT_MAX_FREQ = 4000
 SMOOTHING_FACTOR = 0.2  # Smoothing factor for gradual color transition
 
 logging.basicConfig(
@@ -94,13 +94,23 @@ def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold):
         if rms >= clip_threshold:
             return 0, 0, 65535  # White with full brightness for clipping
 
+        # norm freq might be overkill here
         norm_freq = min(max((freq - min_freq) / (max_freq - min_freq), 0.0), 1.0)
-        # Make hue wrap around more for higher frequency bands to make the output more colorful and dynamic
-        hue = int((np.sin(norm_freq * np.pi * 2) * 0.5 + 0.5) * 65535)
-
-        # Make saturation lower at lower frequencies for pastel like tones, and higher at higher frequencies
-        saturation = int(min(max(norm_freq * 1.2, 0.3), 1.0) * 65535)
-        brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * 65535)
+        # Dynamic palettes based on frequency bands
+        if norm_freq < 0.33:
+            # Low frequencies -> blues and purples (cool)
+            hue = int(norm_freq * 3 * 0.16 * 65535 + 0.5 * 65535)
+            saturation = int(0.5 * 65535)
+        elif norm_freq < 0.66:
+            # Mid frequencies -> greens and cyans
+            hue = int((0.16 + (norm_freq - 0.33) * 3 * 0.16) * 65535)
+            saturation = int(0.75 * 65535)
+        else:
+            # High frequencies -> warm colors (red to yellow)
+            hue = int((0.0 + (norm_freq - 0.66) * 3 * 0.16) * 65535)
+            saturation = 65535
+        
+        brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * 60000)
 
         return hue, saturation, brightness
     except Exception as e:
@@ -164,6 +174,7 @@ def listen_and_analyze(bulbs=[], device_index=None):
     finally:
         stream.stop_stream()
         stream.close()
+        send_color_to_lifx_hsb(devices,0,0,0)
         p.terminate()
         logging.info("Stream closed.")
 
