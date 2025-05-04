@@ -1,3 +1,4 @@
+hue_bridge_ip: "192.168.200.22" # Ensure address is reserved in DHCP conf
 max_updates_per_second: 24
 clip_threshold: 32000
 min_frequency: 100
