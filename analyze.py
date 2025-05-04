@@ -13,11 +13,13 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 
 CONFIG_FILE = "config.yaml"
-DEFAULT_MAX_UPDATES_PER_SECOND = 30
+DEFAULT_MAX_UPDATES_PER_SECOND = 5
 DEFAULT_CLIP_THRESHOLD = 32000
 DEFAULT_MIN_FREQ = 20
 DEFAULT_MAX_FREQ = 20000
-SMOOTHING_FACTOR = 0.2
+DEFAULT_MIN_AMPLITUDE = 1000  # minimum RMS for valid audio
+DEFAULT_IDLE_TIMEOUT = 5  # seconds before setting idle color
+DEFAULT_IDLE_COLOR = (0, 0, 0)  # Hue, Saturation, Brightness for idle (lights off)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,7 +49,10 @@ def get_audio_config(config):
     min_freq = config.get("min_frequency", DEFAULT_MIN_FREQ)
     max_freq = config.get("max_frequency", DEFAULT_MAX_FREQ)
     clip_threshold = config.get("clip_threshold", DEFAULT_CLIP_THRESHOLD)
-    return min_freq, max_freq, clip_threshold
+    min_amplitude = config.get("min_amplitude", DEFAULT_MIN_AMPLITUDE)
+    idle_timeout = config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT)
+    idle_color = config.get("idle_color", DEFAULT_IDLE_COLOR)
+    return min_freq, max_freq, clip_threshold, min_amplitude, idle_timeout, tuple(idle_color)
 
 def connect_hue_bridge(config):
     bridge_ip = config.get("hue_bridge_ip")
@@ -92,61 +97,54 @@ def compute_volume_and_freq(data, rate):
     return rms, peak_freq
 
 
-def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold):
+def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, min_amplitude):
+    if rms < min_amplitude or freq < min_freq or freq > max_freq:
+        return None
+
     try:
         if rms >= clip_threshold:
-            return 0, 0, 100
+            return 0, 0, 127
 
         norm_freq = min(max((freq - min_freq) / (max_freq - min_freq), 0.0), 1.0)
 
         if norm_freq < 0.33:
             hue = int((0.5 + norm_freq * 3 * 0.16) * 65535)
-            saturation = 50
+            saturation = 127
         elif norm_freq < 0.66:
             hue = int((0.16 + (norm_freq - 0.33) * 3 * 0.16) * 65535)
-            saturation = 75
+            saturation = 191
         else:
             hue = int((0.0 + (norm_freq - 0.66) * 3 * 0.16) * 65535)
-            saturation = 100
+            saturation = 254
 
-        brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * 100)
+        brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * 127)
 
-        return hue // 182, saturation, brightness
+        return hue, saturation, brightness
     except Exception as e:
         warnings.warn(f"Color mapping failed: {e}")
-        return 0, 0, 0
+        return None
 
 
-def smooth_transition(current, target, factor):
-    return int(current + (target - current) * factor)
+def send_color_to_hue(lights, target_hsb):
+    hue, saturation, brightness = target_hsb
 
-
-def send_color_to_hue(lights, current_hsb, target_hsb):
-    new_hue = smooth_transition(current_hsb[0], target_hsb[0], SMOOTHING_FACTOR)
-    new_saturation = smooth_transition(current_hsb[1], target_hsb[1], SMOOTHING_FACTOR)
-    new_brightness = smooth_transition(current_hsb[2], target_hsb[2], SMOOTHING_FACTOR)
+    command = {
+        'hue': hue,
+        'sat': saturation,
+        'bri': brightness,
+        'transitiontime': 0
+    }
 
     for light in lights:
         try:
-            light.brightness = new_brightness
-            light.hue = new_hue
-            light.saturation = new_saturation
+            light.bridge.set_light(light.light_id, command)
         except Exception as e:
             warnings.warn(f"Failed to send color to bulb {light.name}: {e}")
 
-    return (new_hue, new_saturation, new_brightness)
 
-
-def listen_and_analyze(duration=10, device_index=None):
+def listen_and_analyze(lights, min_update_interval, min_freq, max_freq, clip_threshold, min_amplitude, idle_timeout, idle_color, device_index=None):
     if device_index is None:
         device_index = p.get_default_input_device_info()["index"]
-
-    config_mtime = os.path.getmtime(CONFIG_FILE) if os.path.exists(CONFIG_FILE) else None
-    config = load_config()
-    bridge = connect_hue_bridge(config)
-    lights = bridge.lights
-    min_update_interval = get_update_interval(config)
-    min_freq, max_freq, clip_threshold = get_audio_config(config)
 
     rate = get_sample_rate(device_index)
 
@@ -158,33 +156,29 @@ def listen_and_analyze(duration=10, device_index=None):
                     frames_per_buffer=CHUNK)
 
     logging.info(f"Listening on device {device_index}... (press Ctrl+C to stop)")
-    start_time = time.time()
     last_update_time = 0
-
-    current_hsb = (0, 0, 0)
+    idle_start_time = None
 
     try:
-        while time.time() - start_time < duration:
-            if os.path.exists(CONFIG_FILE):
-                new_mtime = os.path.getmtime(CONFIG_FILE)
-                if new_mtime != config_mtime:
-                    config = load_config()
-                    bridge = connect_hue_bridge(config)
-                    lights = bridge.lights
-                    min_update_interval = get_update_interval(config)
-                    min_freq, max_freq, clip_threshold = get_audio_config(config)
-                    config_mtime = new_mtime
-                    logging.info("Reloaded config.")
-
+        while True:
             data = stream.read(CHUNK, exception_on_overflow=False)
             rms, freq = compute_volume_and_freq(data, rate)
-            target_hsb = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold)
-            logging.info(f"Volume (RMS): {rms:.2f} | Dominant Freq: {freq:.2f} Hz | HSB Target: {target_hsb}")
+            target_hsb = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, min_amplitude)
 
             current_time = time.time()
-            if current_time - last_update_time >= min_update_interval:
-                current_hsb = send_color_to_hue(lights, current_hsb, target_hsb)
-                last_update_time = current_time
+
+            if target_hsb is not None:
+                logging.info(f"Volume (RMS): {rms:.2f} | Dominant Freq: {freq:.2f} Hz | HSB: {target_hsb}")
+                idle_start_time = None
+                if current_time - last_update_time >= min_update_interval:
+                    send_color_to_hue(lights, target_hsb)
+                    last_update_time = current_time
+            else:
+                if idle_start_time is None:
+                    idle_start_time = current_time
+                elif current_time - idle_start_time >= idle_timeout and current_time - last_update_time >= min_update_interval:
+                    send_color_to_hue(lights, idle_color)
+                    last_update_time = current_time
 
     except KeyboardInterrupt:
         logging.info("Stopped by user.")
@@ -195,9 +189,15 @@ def listen_and_analyze(duration=10, device_index=None):
         logging.info("Stream closed.")
 
 if __name__ == "__main__":
+    config = load_config()
+    bridge = connect_hue_bridge(config)
+    lights = bridge.lights
+    min_update_interval = get_update_interval(config)
+    min_freq, max_freq, clip_threshold, min_amplitude, idle_timeout, idle_color = get_audio_config(config)
+
     list_input_devices()
     try:
         selected = int(input("\nEnter the device index to use: "))
     except ValueError:
         selected = None
-    listen_and_analyze(duration=10, device_index=selected)
+    listen_and_analyze(lights, min_update_interval, min_freq, max_freq, clip_threshold, min_amplitude, idle_timeout, idle_color, device_index=selected)

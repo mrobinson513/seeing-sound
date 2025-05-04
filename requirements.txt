@@ -1,0 +1,5 @@
+numpy
+pyaudio
+PyYAML
+git+ssh://git@github.com/mclarkk/lifxlan.git#lifxlan
+phue

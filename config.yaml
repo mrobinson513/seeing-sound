@@ -1,6 +1,8 @@
-hue_bridge_ip: "192.168.200.22" # Ensure address is reserved in DHCP conf
-max_updates_per_second: 24
+hue_bridge_ip: "192.168.200.22"
+max_updates_per_second: 5
 clip_threshold: 32000
-min_frequency: 100
-max_frequency: 4000
-max_brightness: 65535 # 
+min_frequency: 20
+max_frequency: 20000
+idle_timeout: 5
+idle_color: [0, 0, 0]  # lights off
+min_amplitude: 100 # if signal is lower than this, don't send data
