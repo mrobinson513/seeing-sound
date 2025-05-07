@@ -17,6 +17,7 @@ DEFAULT_MAX_UPDATES_PER_SECOND = 30
 DEFAULT_CLIP_THRESHOLD = 32000
 DEFAULT_MIN_FREQ = 100
 DEFAULT_MAX_FREQ = 4000
+DEFAULT_MAX_BRIGHTNESS = 60000
 SMOOTHING_FACTOR = 0.2  # Smoothing factor for gradual color transition
 
 logging.basicConfig(
@@ -48,7 +49,8 @@ def get_audio_config(config):
     min_freq = config.get("min_frequency", DEFAULT_MIN_FREQ)
     max_freq = config.get("max_frequency", DEFAULT_MAX_FREQ)
     clip_threshold = config.get("clip_threshold", DEFAULT_CLIP_THRESHOLD)
-    return min_freq, max_freq, clip_threshold
+    max_brightness = config.get("max_brightness", DEFAULT_MAX_BRIGHTNESS)
+    return min_freq, max_freq, clip_threshold, max_brightness
 
 # List all available input devices
 def list_input_devices():
@@ -64,7 +66,6 @@ def get_sample_rate(device_index):
         return int(p.get_device_info_by_index(device_index)["defaultSampleRate"])
     except Exception:
         return 44100  # Fallback
-
 
 def compute_volume_and_freq(data, rate):
     samples = np.frombuffer(data, dtype=np.int16)
@@ -88,36 +89,29 @@ def compute_volume_and_freq(data, rate):
 
     return rms, peak_freq
 
-
-def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold):
+def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness):
     try:
         if rms >= clip_threshold:
-            return 0, 0, 65535  # White with full brightness for clipping
+            return 0, 0, max_brightness  # White with full brightness for clipping
 
-        # norm freq might be overkill here
         norm_freq = min(max((freq - min_freq) / (max_freq - min_freq), 0.0), 1.0)
-        
-        # Dynamic palettes based on frequency bands
+
         if norm_freq < 0.33:
-            # Low frequencies -> blues and purples (cool)
             hue = int(norm_freq * 3 * 0.16 * 65535 + 0.5 * 65535)
             saturation = int(0.5 * 65535)
         elif norm_freq < 0.66:
-            # Mid frequencies -> greens and cyans
             hue = int((0.16 + (norm_freq - 0.33) * 3 * 0.16) * 65535)
             saturation = int(0.75 * 65535)
         else:
-            # High frequencies -> warm colors (red to yellow)
             hue = int((0.0 + (norm_freq - 0.66) * 3 * 0.16) * 65535)
             saturation = 65535
-        
-        brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * 60000)
+
+        brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * max_brightness)
 
         return hue, saturation, brightness
     except Exception as e:
         warnings.warn(f"Color mapping failed: {e}")
         return 0, 0, 0
-
 
 def send_color_to_lifx_hsb(bulbs, hue, saturation, brightness):
     try:
@@ -126,7 +120,6 @@ def send_color_to_lifx_hsb(bulbs, hue, saturation, brightness):
     except Exception as e:
         warnings.warn(f"Failed to send color to LIFX bulbs: {e}")
 
-
 def listen_and_analyze(bulbs=[], device_index=None):
     if device_index is None:
         device_index = p.get_default_input_device_info()["index"]
@@ -134,7 +127,7 @@ def listen_and_analyze(bulbs=[], device_index=None):
     config_mtime = os.path.getmtime(CONFIG_FILE) if os.path.exists(CONFIG_FILE) else None
     config = load_config()
     min_update_interval = get_update_interval(config)
-    min_freq, max_freq, clip_threshold = get_audio_config(config)
+    min_freq, max_freq, clip_threshold, max_brightness = get_audio_config(config)
 
     rate = get_sample_rate(device_index)
 
@@ -146,7 +139,6 @@ def listen_and_analyze(bulbs=[], device_index=None):
                     frames_per_buffer=CHUNK)
 
     logging.info(f"Listening on device {device_index}... (press Ctrl+C to stop)")
-    start_time = time.time()
     last_update_time = 0
 
     try:
@@ -156,13 +148,13 @@ def listen_and_analyze(bulbs=[], device_index=None):
                 if new_mtime != config_mtime:
                     config = load_config()
                     min_update_interval = get_update_interval(config)
-                    min_freq, max_freq, clip_threshold = get_audio_config(config)
+                    min_freq, max_freq, clip_threshold, max_brightness = get_audio_config(config)
                     config_mtime = new_mtime
                     logging.info("Reloaded config.")
 
             data = stream.read(CHUNK, exception_on_overflow=False)
             rms, freq = compute_volume_and_freq(data, rate)
-            hue, saturation, brightness = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold)
+            hue, saturation, brightness = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness)
             logging.info(f"Volume (RMS): {rms:.2f} | Dominant Freq: {freq:.2f} Hz | HSB: ({hue}, {saturation}, {brightness})")
 
             current_time = time.time()
@@ -175,7 +167,7 @@ def listen_and_analyze(bulbs=[], device_index=None):
     finally:
         stream.stop_stream()
         stream.close()
-        send_color_to_lifx_hsb(devices,0,0,0)
+        send_color_to_lifx_hsb(bulbs, 0, 0, 0)
         p.terminate()
         logging.info("Stream closed.")
 
