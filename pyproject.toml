@@ -1,20 +1,20 @@
 [tool.poetry]
-name = "realtime-audio-analyzer"
+name = "sound2light"
 version = "0.1.0"
-description = "A real-time audio analyzer that maps audio input to colors and controls LIFX smart bulbs."
-authors = ["Your Name"]
+description = "Real-time audio analyzer and LIFX light controller"
+authors = ["Mike Robinson <michael_robinson@live.ca"]
 readme = "README.md"
-license = "MIT"
+packages = [{include = "sound2light"}]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
-numpy = "*"
+python = "^3.11"
 pyaudio = "*"
+numpy = "*"
 PyYAML = "*"
-lifxlan = {git = "ssh://git@github.com/mclarkk/lifxlan.git"}
+lifxlan = "*"
 
-[tool.poetry.group.dev.dependencies]
-# Add development dependencies here if needed
+[tool.poetry.scripts]
+sound2light = "sound2light.main:main"
 
 [build-system]
 requires = ["poetry-core"]

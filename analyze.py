@@ -18,10 +18,24 @@ DEFAULT_CLIP_THRESHOLD = 32000
 DEFAULT_MIN_FREQ = 100
 DEFAULT_MAX_FREQ = 4000
 DEFAULT_MAX_BRIGHTNESS = 60000
+DEFAULT_LOG_LEVEL = "INFO"
 SMOOTHING_FACTOR = 0.2  # Smoothing factor for gradual color transition
 
+def load_config():
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            config = yaml.safe_load(f)
+            return config or {}
+    except FileNotFoundError:
+        return {}
+
+def get_log_level(config):
+    level_name = config.get("log_level", DEFAULT_LOG_LEVEL).upper()
+    return getattr(logging, level_name, logging.INFO)
+
+config = load_config()
 logging.basicConfig(
-    level=logging.INFO,
+    level=get_log_level(config),
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -30,15 +44,6 @@ logging.basicConfig(
 )
 
 p = pyaudio.PyAudio()
-
-# Load configuration
-def load_config():
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            config = yaml.safe_load(f)
-            return config or {}
-    except FileNotFoundError:
-        return {}
 
 def get_update_interval(config):
     max_updates = config.get("max_updates_per_second", DEFAULT_MAX_UPDATES_PER_SECOND)
@@ -52,15 +57,13 @@ def get_audio_config(config):
     max_brightness = config.get("max_brightness", DEFAULT_MAX_BRIGHTNESS)
     return min_freq, max_freq, clip_threshold, max_brightness
 
-# List all available input devices
 def list_input_devices():
-    logging.info("Available input devices:")
+    print("Available input devices:")
     for i in range(p.get_device_count()):
         info = p.get_device_info_by_index(i)
         if info["maxInputChannels"] > 0:
-            logging.info(f"  [{i}] {info['name']}")
+            print(f"  [{i}] {info['name']}")
 
-# Dynamically get sample rate from a selected input device
 def get_sample_rate(device_index):
     try:
         return int(p.get_device_info_by_index(device_index)["defaultSampleRate"])
@@ -163,13 +166,14 @@ def listen_and_analyze(bulbs=[], device_index=None):
                 last_update_time = current_time
 
     except KeyboardInterrupt:
-        logging.info("Stopped by user.")
+        logging.warning("Stopped by user.")
+
     finally:
         stream.stop_stream()
         stream.close()
         send_color_to_lifx_hsb(bulbs, 0, 0, 0)
         p.terminate()
-        logging.info("Stream closed.")
+        print("Stream closed.")
 
 if __name__ == "__main__":
     list_input_devices()
@@ -179,4 +183,5 @@ if __name__ == "__main__":
         selected = None
     lifx = lifxlan.LifxLAN()
     devices = lifx.get_devices()
+    print("Rave in progress...")
     listen_and_analyze(bulbs=devices, device_index=selected)
