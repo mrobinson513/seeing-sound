@@ -1,12 +1,5 @@
-
-# app stuff
-log_level: WARN
-
-# lights and sound
-max_updates_per_second: 24
 clip_threshold: 32000
-min_frequency: 100
-max_frequency: 4000
+log_level: DEBUG
 max_brightness: 30000
-min_rms_threshold: 100
-
+max_frequency: 4000
+min_frequency: 100

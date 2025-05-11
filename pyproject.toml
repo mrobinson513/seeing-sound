@@ -1,21 +1,24 @@
-[tool.poetry]
-name = "sound2light"
+[project]
+name = "seeing-sound"
 version = "0.1.0"
-description = "Real-time audio analyzer and LIFX light controller"
-authors = ["Mike Robinson <michael_robinson@live.ca"]
+description = ""
+authors = [
+    {name = "Mike Robinson",email = "michael_robinson@live.ca"}
+]
 readme = "README.md"
-packages = [{include = "sound2light"}]
-
-[tool.poetry.dependencies]
-python = "^3.11"
-pyaudio = "*"
-numpy = "*"
-PyYAML = "*"
-lifxlan = "*"
-
-[tool.poetry.scripts]
-sound2light = "sound2light.main:main"
+requires-python = ">=3.11"
+dependencies = [
+    "pyaudio (>=0.2.14,<0.3.0)",
+    "numpy (>=2.2.5,<3.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)",
+    "pyqt6 (>=6.9.0,<7.0.0)",
+    "lifxlan @ git+ssh://git@github.com:mclarkk/lifxlan.git"
+]
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[project.scripts]
+run = "seeing_sound.main:main"
+run_gui = "seeing_sound.gui:main"
