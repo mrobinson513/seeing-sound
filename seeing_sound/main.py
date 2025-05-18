@@ -40,9 +40,10 @@ def listen_and_analyze(bulbs=[], device_index=None):
             hue, saturation, brightness = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness)
             logging.info(f"Volume (RMS): {rms:.2f} | Freq: {freq:.2f} Hz | HSB: ({hue}, {saturation}, {brightness})")
 
-            if time.time() - last_update_time >= min_update_interval:
+            current_time = time.time()
+            if current_time - last_update_time >= min_update_interval:
                 send_color_to_lifx_hsb(bulbs, hue, saturation, brightness)
-                last_update_time = time.time()
+                last_update_time = current_time
 
     except KeyboardInterrupt:
         logging.info("Stopped by user.")

@@ -31,6 +31,8 @@ def get_audio_config(config):
         config.get("max_brightness", DEFAULT_MAX_BRIGHTNESS),
     )
 
+DEFAULT_MAX_UPDATES_PER_SECOND = 30
+
 def get_update_interval(config):
     max_updates = config.get("max_updates_per_second", DEFAULT_MAX_UPDATES_PER_SECOND)
-    return 1.0 / min(max_updates, 30)
+    return 1.0 / min(max_updates, 60)  # enforce safe upper limit (60 FPS)
