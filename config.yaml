@@ -3,4 +3,3 @@ log_level: DEBUG
 max_brightness: 30000
 max_frequency: 4000
 min_frequency: 100
-max_updates_per_second: 24
