@@ -81,8 +81,15 @@ class MainWindow(QWidget):
             
             device_index = self.device_combo.currentData()
 
+            selected_profile = self.profile_combo.currentText()
+            profile = get_profile(selected_profile)
+
             self.worker_thread = threading.Thread(
-                target=listen_and_analyze, kwargs={"bulbs": bulbs, "device_index": device_index}, daemon=True
+                target=listen_and_analyze, kwargs={
+                    "bulbs": bulbs, 
+                    "device_index": device_index,
+                    "profile": profile},
+                daemon=True
             )
             self.worker_thread.start()
             self.start_btn.setText("Stop")
