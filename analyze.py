@@ -3,14 +3,14 @@ import pyaudio
 import time
 import colorsys
 import warnings
-import lifxlan
 import yaml
 import os
 import logging
+from phue import Bridge
 
-CHUNK = 1024              # Samples per audio frame
-FORMAT = pyaudio.paInt16  # 16-bit resolution
-CHANNELS = 1              # Mono audio
+CHUNK = 1024
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
 
 CONFIG_FILE = "config.yaml"
 DEFAULT_MAX_UPDATES_PER_SECOND = 30
@@ -47,7 +47,7 @@ p = pyaudio.PyAudio()
 
 def get_update_interval(config):
     max_updates = config.get("max_updates_per_second", DEFAULT_MAX_UPDATES_PER_SECOND)
-    max_updates = min(max_updates, 30)  # Enforce hard limit
+    max_updates = min(max_updates, 30)
     return 1.0 / max_updates
 
 def get_audio_config(config):
@@ -72,7 +72,6 @@ def get_sample_rate(device_index):
 
 def compute_volume_and_freq(data, rate):
     samples = np.frombuffer(data, dtype=np.int16)
-
     if len(samples) == 0:
         return 0.0, 0.0
 
@@ -95,26 +94,24 @@ def compute_volume_and_freq(data, rate):
 def audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness):
     try:
         if rms >= clip_threshold:
-            return 0, 0, max_brightness  # White with full brightness for clipping
-
+            return 0, 0, max_brightness 
         norm_freq = min(max((freq - min_freq) / (max_freq - min_freq), 0.0), 1.0)
-
         if norm_freq < 0.33:
             hue = int(norm_freq * 3 * 0.16 * 65535 + 0.5 * 65535)
             saturation = int(0.5 * 65535)
         elif norm_freq < 0.66:
             hue = int((0.16 + (norm_freq - 0.33) * 3 * 0.16) * 65535)
-            saturation = int(0.75 * 65535)
+            saturation = 75
         else:
             hue = int((0.0 + (norm_freq - 0.66) * 3 * 0.16) * 65535)
             saturation = 65535
-
         brightness = int(min(max(rms / 5000.0, 0.0), 1.0) * max_brightness)
 
-        return hue, saturation, brightness
+        return hue // 182, saturation, brightness
     except Exception as e:
         warnings.warn(f"Color mapping failed: {e}")
         return 0, 0, 0
+
 
 def send_color_to_lifx_hsb(bulbs, hue, saturation, brightness):
     try:
@@ -129,6 +126,8 @@ def listen_and_analyze(bulbs=[], device_index=None):
 
     config_mtime = os.path.getmtime(CONFIG_FILE) if os.path.exists(CONFIG_FILE) else None
     config = load_config()
+    bridge = connect_hue_bridge(config)
+    lights = bridge.lights
     min_update_interval = get_update_interval(config)
     min_freq, max_freq, clip_threshold, max_brightness = get_audio_config(config)
 
@@ -144,12 +143,16 @@ def listen_and_analyze(bulbs=[], device_index=None):
     logging.info(f"Listening on device {device_index}... (press Ctrl+C to stop)")
     last_update_time = 0
 
+    current_hsb = (0, 0, 0)
+
     try:
-        while True:
+        while time.time() - start_time < duration:
             if os.path.exists(CONFIG_FILE):
                 new_mtime = os.path.getmtime(CONFIG_FILE)
                 if new_mtime != config_mtime:
                     config = load_config()
+                    bridge = connect_hue_bridge(config)
+                    lights = bridge.lights
                     min_update_interval = get_update_interval(config)
                     min_freq, max_freq, clip_threshold, max_brightness = get_audio_config(config)
                     config_mtime = new_mtime
@@ -159,10 +162,9 @@ def listen_and_analyze(bulbs=[], device_index=None):
             rms, freq = compute_volume_and_freq(data, rate)
             hue, saturation, brightness = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness)
             logging.info(f"Volume (RMS): {rms:.2f} | Dominant Freq: {freq:.2f} Hz | HSB: ({hue}, {saturation}, {brightness})")
-
             current_time = time.time()
             if current_time - last_update_time >= min_update_interval:
-                send_color_to_lifx_hsb(bulbs, hue, saturation, brightness)
+                current_hsb = send_color_to_hue(lights, current_hsb, target_hsb)
                 last_update_time = current_time
 
     except KeyboardInterrupt:
