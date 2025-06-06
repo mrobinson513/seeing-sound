@@ -12,7 +12,8 @@ dependencies = [
     "numpy (>=2.2.5,<3.0.0)",
     "pyyaml (>=6.0.2,<7.0.0)",
     "pyqt6 (>=6.9.0,<7.0.0)",
-    "lifxlan @ git+ssh://git@github.com:mclarkk/lifxlan.git"
+    "lifxlan @ git+ssh://git@github.com:mclarkk/lifxlan.git",
+    "sounddevice (>=0.5.2,<0.6.0)"
 ]
 
 [build-system]

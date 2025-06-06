@@ -10,6 +10,7 @@ from seeing_sound.config import CONFIG_FILE, load_config
 from seeing_sound.audio import p
 from seeing_sound.lifx import discover_bulbs
 from seeing_sound.main import listen_and_analyze
+from seeing_sound.color_profiles import get_profile
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -40,6 +41,14 @@ class MainWindow(QWidget):
             if info["maxInputChannels"] > 0:
                 self.device_combo.addItem(f"[{i}] {info['name']}", i)
         layout.addWidget(self.device_combo)
+
+        profile_row = QHBoxLayout()
+        profile_label = QLabel("Color Profile")
+        self.profile_combo = QComboBox()
+        self.profile_combo.addItems(["default", "warm", "cold"])
+        profile_row.addWidget(profile_label)
+        profile_row.addWidget(self.profile_combo)
+        layout.addLayout(profile_row)
 
         self.start_btn = QPushButton("Start")
         self.start_btn.clicked.connect(self.toggle_execution)

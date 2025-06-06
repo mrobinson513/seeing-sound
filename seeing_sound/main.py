@@ -7,7 +7,7 @@ from seeing_sound.audio import list_input_devices, get_sample_rate, compute_volu
 from seeing_sound.color import audio_to_hsb
 from seeing_sound.lifx import discover_bulbs, send_color_to_lifx_hsb
 
-def listen_and_analyze(bulbs=[], device_index=None):
+def listen_and_analyze(profile, bulbs=[], device_index=None):
     logging.info(f"Got {len(bulbs)} bulbs: {[b.get_ip_addr() for b in bulbs]}")
 
     if device_index is None:
@@ -37,12 +37,12 @@ def listen_and_analyze(bulbs=[], device_index=None):
 
             data = stream.read(CHUNK, exception_on_overflow=False)
             rms, freq = compute_volume_and_freq(data, rate)
-            hue, saturation, brightness = audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness)
-            logging.info(f"Volume (RMS): {rms:.2f} | Freq: {freq:.2f} Hz | HSB: ({hue}, {saturation}, {brightness})")
+            h, s, b = profile.map_audio_to_hsb(rms, freq, min_freq, max_freq, clip_threshold, max_brightness)
+            logging.info(f"Volume (RMS): {rms:.2f} | Freq: {freq:.2f} Hz | HSB: ({h}, {s}, {b})")
 
             current_time = time.time()
             if current_time - last_update_time >= min_update_interval:
-                send_color_to_lifx_hsb(bulbs, hue, saturation, brightness)
+                send_color_to_lifx_hsb(bulbs, h, s, b)
                 last_update_time = current_time
 
     except KeyboardInterrupt:
