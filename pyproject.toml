@@ -1,21 +1,24 @@
-[tool.poetry]
-name = "realtime-audio-analyzer"
+[project]
+name = "seeing-sound"
 version = "0.1.0"
-description = "A real-time audio analyzer that maps audio input to colors and controls LIFX smart bulbs."
-authors = ["Your Name"]
+description = ""
+authors = [
+    {name = "Mike Robinson",email = "michael_robinson@live.ca"}
+]
 readme = "README.md"
-license = "MIT"
-
-[tool.poetry.dependencies]
-python = ">=3.8,<3.12"
-numpy = "*"
-pyaudio = "*"
-PyYAML = "*"
-lifxlan = {git = "ssh://git@github.com/mclarkk/lifxlan.git"}
-
-[tool.poetry.group.dev.dependencies]
-# Add development dependencies here if needed
+requires-python = ">=3.11"
+dependencies = [
+    "pyaudio (>=0.2.14,<0.3.0)",
+    "numpy (>=2.2.5,<3.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)",
+    "pyqt6 (>=6.9.0,<7.0.0)",
+    "lifxlan @ git+ssh://git@github.com:mclarkk/lifxlan.git"
+]
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[project.scripts]
+run = "seeing_sound.main:main"
+run_gui = "seeing_sound.gui:main"
